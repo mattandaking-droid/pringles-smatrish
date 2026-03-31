@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local DataStoreService = game:GetService("DataStoreService")
 
 local localPlayer = Players.LocalPlayer
 
@@ -27,11 +28,11 @@ local HitboxObjects = {}
 local OriginalSizes = {}
 
 -- Pringles färger
-local GREEN = Color3.fromRGB(78, 153, 64)       -- Pringles grön
-local DARK_GREEN = Color3.fromRGB(50, 110, 40)  -- Mörkare grön
-local RED = Color3.fromRGB(180, 30, 40)         -- Pringles röd (loggan)
+local GREEN = Color3.fromRGB(78, 153, 64)
+local DARK_GREEN = Color3.fromRGB(50, 110, 40)
+local RED = Color3.fromRGB(180, 30, 40)
 local WHITE = Color3.fromRGB(255, 255, 255)
-local LIGHT_GREEN = Color3.fromRGB(200, 230, 180) -- Ljusgrön text
+local LIGHT_GREEN = Color3.fromRGB(200, 230, 180)
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PringlesSmatrish"
@@ -40,8 +41,8 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = localPlayer.PlayerGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 230, 0, 440)
-mainFrame.Position = UDim2.new(0, 20, 0.5, -220)
+mainFrame.Size = UDim2.new(0, 230, 0, 470)
+mainFrame.Position = UDim2.new(0, 20, 0.5, -235)
 mainFrame.BackgroundColor3 = GREEN
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -49,13 +50,11 @@ mainFrame.Draggable = true
 mainFrame.Parent = screenGui
 Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 16)
 
--- Mörkgrön kant runt hela
 local stroke = Instance.new("UIStroke")
 stroke.Color = DARK_GREEN
 stroke.Thickness = 3
 stroke.Parent = mainFrame
 
--- Silvertopp
 local silverTop = Instance.new("Frame")
 silverTop.Size = UDim2.new(1, 0, 0, 14)
 silverTop.Position = UDim2.new(0, 0, 0, 0)
@@ -64,7 +63,6 @@ silverTop.BorderSizePixel = 0
 silverTop.Parent = mainFrame
 Instance.new("UICorner", silverTop).CornerRadius = UDim.new(0, 16)
 
--- Röd logga-banner
 local redBanner = Instance.new("Frame")
 redBanner.Size = UDim2.new(1, -20, 0, 36)
 redBanner.Position = UDim2.new(0, 10, 0, 20)
@@ -82,7 +80,6 @@ titleLabel.TextSize = 15
 titleLabel.Text = "PRINGLES smatrish'"
 titleLabel.Parent = redBanner
 
--- Subtitel
 local subTitle = Instance.new("TextLabel")
 subTitle.Size = UDim2.new(1, 0, 0, 18)
 subTitle.Position = UDim2.new(0, 0, 0, 58)
@@ -93,13 +90,23 @@ subTitle.TextSize = 11
 subTitle.Text = "SOUR CREAM & ONION"
 subTitle.Parent = mainFrame
 
--- Divider
 local divider = Instance.new("Frame")
 divider.Size = UDim2.new(1, -20, 0, 2)
 divider.Position = UDim2.new(0, 10, 0, 78)
 divider.BackgroundColor3 = DARK_GREEN
 divider.BorderSizePixel = 0
 divider.Parent = mainFrame
+
+-- Hide hint label
+local hintLabel = Instance.new("TextLabel")
+hintLabel.Size = UDim2.new(1, -20, 0, 16)
+hintLabel.Position = UDim2.new(0, 10, 1, -20)
+hintLabel.BackgroundTransparency = 1
+hintLabel.TextColor3 = LIGHT_GREEN
+hintLabel.Font = Enum.Font.Gotham
+hintLabel.TextSize = 10
+hintLabel.Text = "Right Shift = Visa/Göm"
+hintLabel.Parent = mainFrame
 
 local function createSection(text, yPos)
 	local label = Instance.new("TextLabel")
@@ -112,6 +119,48 @@ local function createSection(text, yPos)
 	label.Text = text
 	label.Parent = mainFrame
 	Instance.new("UICorner", label).CornerRadius = UDim.new(0, 6)
+end
+
+-- Config sparning (använder en tabell i minnet + writefile om executor stödjer det)
+local function saveConfig()
+	local config = {
+		ESPEnabled = Settings.ESPEnabled,
+		ShowName = Settings.ShowName,
+		ShowHealth = Settings.ShowHealth,
+		ShowDistance = Settings.ShowDistance,
+		MaxDistance = Settings.MaxDistance,
+		HitboxEnabled = Settings.HitboxEnabled,
+		HitboxSizeX = Settings.HitboxSize.X,
+		ShowHitbox = Settings.ShowHitbox,
+	}
+	local encoded = game:GetService("HttpService"):JSONEncode(config)
+	if writefile then
+		writefile("pringles_config.json", encoded)
+		print("✅ Config sparad!")
+	else
+		warn("Executor stödjer inte writefile")
+	end
+end
+
+local function loadConfig()
+	if readfile and isfile and isfile("pringles_config.json") then
+		local ok, data = pcall(function()
+			return game:GetService("HttpService"):JSONDecode(readfile("pringles_config.json"))
+		end)
+		if ok and data then
+			Settings.ESPEnabled = data.ESPEnabled ~= nil and data.ESPEnabled or Settings.ESPEnabled
+			Settings.ShowName = data.ShowName ~= nil and data.ShowName or Settings.ShowName
+			Settings.ShowHealth = data.ShowHealth ~= nil and data.ShowHealth or Settings.ShowHealth
+			Settings.ShowDistance = data.ShowDistance ~= nil and data.ShowDistance or Settings.ShowDistance
+			Settings.MaxDistance = data.MaxDistance or Settings.MaxDistance
+			Settings.HitboxEnabled = data.HitboxEnabled ~= nil and data.HitboxEnabled or Settings.HitboxEnabled
+			Settings.ShowHitbox = data.ShowHitbox ~= nil and data.ShowHitbox or Settings.ShowHitbox
+			if data.HitboxSizeX then
+				Settings.HitboxSize = Vector3.new(data.HitboxSizeX, data.HitboxSizeX * 1.5, data.HitboxSizeX)
+			end
+			print("✅ Config laddad!")
+		end
+	end
 end
 
 local function createToggle(labelText, yPos, settingKey)
@@ -156,7 +205,11 @@ local function createToggle(labelText, yPos, settingKey)
 		Settings[settingKey] = not Settings[settingKey]
 		updateBtn()
 	end)
+
+	return updateBtn
 end
+
+local sliderUpdaters = {}
 
 local function createSlider(labelText, yPos, settingKey, minVal, maxVal, isHitbox)
 	local sizeLabel = Instance.new("TextLabel")
@@ -208,6 +261,13 @@ local function createSlider(labelText, yPos, settingKey, minVal, maxVal, isHitbo
 		sizeLabel.Text = labelText .. ": " .. val
 	end
 
+	-- Spara referens så vi kan synka efter config load
+	sliderUpdaters[settingKey] = function()
+		local val = isHitbox and Settings[settingKey].X or Settings[settingKey]
+		local ratio = (val - minVal) / (maxVal - minVal)
+		updateSlider(ratio)
+	end
+
 	sizeFrame.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
 			dragging = true
@@ -231,16 +291,48 @@ local function createSlider(labelText, yPos, settingKey, minVal, maxVal, isHitbo
 end
 
 createSection("— ESP —", 88)
-createToggle("ESP", 116, "ESPEnabled")
-createToggle("Visa Namn", 146, "ShowName")
-createToggle("Visa Hälsa", 176, "ShowHealth")
-createToggle("Visa Avstånd", 206, "ShowDistance")
+local espToggle = createToggle("ESP", 116, "ESPEnabled")
+local nameToggle = createToggle("Visa Namn", 146, "ShowName")
+local healthToggle = createToggle("Visa Hälsa", 176, "ShowHealth")
+local distToggle = createToggle("Visa Avstånd", 206, "ShowDistance")
 createSlider("Max Avstånd", 238, "MaxDistance", 100, 1000, false)
 
 createSection("— Hitbox —", 290)
-createToggle("Hitbox", 318, "HitboxEnabled")
-createToggle("Visa Hitbox", 348, "ShowHitbox")
+local hitboxToggle = createToggle("Hitbox", 318, "HitboxEnabled")
+local showHitboxToggle = createToggle("Visa Hitbox", 348, "ShowHitbox")
 createSlider("Storlek", 380, "HitboxSize", 10, 100, true)
+
+-- Spara config knapp
+local saveBtn = Instance.new("TextButton")
+saveBtn.Size = UDim2.new(1, -20, 0, 26)
+saveBtn.Position = UDim2.new(0, 10, 0, 432)
+saveBtn.BackgroundColor3 = RED
+saveBtn.TextColor3 = WHITE
+saveBtn.Font = Enum.Font.GothamBold
+saveBtn.TextSize = 12
+saveBtn.Text = "💾 Spara Config"
+saveBtn.BorderSizePixel = 0
+saveBtn.Parent = mainFrame
+Instance.new("UICorner", saveBtn).CornerRadius = UDim.new(0, 6)
+
+saveBtn.MouseButton1Click:Connect(function()
+	saveConfig()
+	saveBtn.Text = "✅ Sparad!"
+	task.wait(1.5)
+	saveBtn.Text = "💾 Spara Config"
+end)
+
+-- =====================
+-- Höger Shift toggle
+-- =====================
+local guiVisible = true
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.RightShift then
+		guiVisible = not guiVisible
+		mainFrame.Visible = guiVisible
+	end
+end)
 
 -- =====================
 -- ESP Logic
@@ -404,6 +496,12 @@ RunService.RenderStepped:Connect(function()
 		end
 	end
 end)
+
+-- Init + ladda config
+loadConfig()
+for k, updater in pairs(sliderUpdaters) do
+	updater()
+end
 
 for _, p in ipairs(Players:GetPlayers()) do
 	createESP(p)
