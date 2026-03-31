@@ -3,7 +3,6 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local DataStoreService = game:GetService("DataStoreService")
 
 local localPlayer = Players.LocalPlayer
 
@@ -21,13 +20,14 @@ local Settings = {
 	ShowHitbox = true,
 	HitboxColor = Color3.fromRGB(255, 80, 80),
 	HitboxTransparency = 0.5,
+
+	InstantLoot = true,
 }
 
 local ESPObjects = {}
 local HitboxObjects = {}
 local OriginalSizes = {}
 
--- Pringles färger
 local GREEN = Color3.fromRGB(78, 153, 64)
 local DARK_GREEN = Color3.fromRGB(50, 110, 40)
 local RED = Color3.fromRGB(180, 30, 40)
@@ -41,8 +41,8 @@ screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = localPlayer.PlayerGui
 
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 230, 0, 470)
-mainFrame.Position = UDim2.new(0, 20, 0.5, -235)
+mainFrame.Size = UDim2.new(0, 230, 0, 580)
+mainFrame.Position = UDim2.new(0, 20, 0.5, -290)
 mainFrame.BackgroundColor3 = GREEN
 mainFrame.BorderSizePixel = 0
 mainFrame.Active = true
@@ -97,16 +97,18 @@ divider.BackgroundColor3 = DARK_GREEN
 divider.BorderSizePixel = 0
 divider.Parent = mainFrame
 
--- Hide hint label
+-- Hint label (synlig med bakgrund)
 local hintLabel = Instance.new("TextLabel")
-hintLabel.Size = UDim2.new(1, -20, 0, 16)
-hintLabel.Position = UDim2.new(0, 10, 1, -20)
-hintLabel.BackgroundTransparency = 1
-hintLabel.TextColor3 = LIGHT_GREEN
-hintLabel.Font = Enum.Font.Gotham
-hintLabel.TextSize = 10
-hintLabel.Text = "Right Shift = Visa/Göm"
+hintLabel.Size = UDim2.new(1, -20, 0, 22)
+hintLabel.Position = UDim2.new(0, 10, 1, -28)
+hintLabel.BackgroundColor3 = DARK_GREEN
+hintLabel.TextColor3 = WHITE
+hintLabel.Font = Enum.Font.GothamBold
+hintLabel.TextSize = 11
+hintLabel.Text = "⌨️ Right Shift = Visa/Göm"
+hintLabel.BorderSizePixel = 0
 hintLabel.Parent = mainFrame
+Instance.new("UICorner", hintLabel).CornerRadius = UDim.new(0, 6)
 
 local function createSection(text, yPos)
 	local label = Instance.new("TextLabel")
@@ -121,7 +123,6 @@ local function createSection(text, yPos)
 	Instance.new("UICorner", label).CornerRadius = UDim.new(0, 6)
 end
 
--- Config sparning (använder en tabell i minnet + writefile om executor stödjer det)
 local function saveConfig()
 	local config = {
 		ESPEnabled = Settings.ESPEnabled,
@@ -132,6 +133,7 @@ local function saveConfig()
 		HitboxEnabled = Settings.HitboxEnabled,
 		HitboxSizeX = Settings.HitboxSize.X,
 		ShowHitbox = Settings.ShowHitbox,
+		InstantLoot = Settings.InstantLoot,
 	}
 	local encoded = game:GetService("HttpService"):JSONEncode(config)
 	if writefile then
@@ -155,6 +157,7 @@ local function loadConfig()
 			Settings.MaxDistance = data.MaxDistance or Settings.MaxDistance
 			Settings.HitboxEnabled = data.HitboxEnabled ~= nil and data.HitboxEnabled or Settings.HitboxEnabled
 			Settings.ShowHitbox = data.ShowHitbox ~= nil and data.ShowHitbox or Settings.ShowHitbox
+			Settings.InstantLoot = data.InstantLoot ~= nil and data.InstantLoot or Settings.InstantLoot
 			if data.HitboxSizeX then
 				Settings.HitboxSize = Vector3.new(data.HitboxSizeX, data.HitboxSizeX * 1.5, data.HitboxSizeX)
 			end
@@ -163,7 +166,9 @@ local function loadConfig()
 	end
 end
 
-local function createToggle(labelText, yPos, settingKey)
+local sliderUpdaters = {}
+
+local function createToggle(labelText, yPos, settingKey, callback)
 	local row = Instance.new("Frame")
 	row.Size = UDim2.new(1, -20, 0, 28)
 	row.Position = UDim2.new(0, 10, 0, yPos)
@@ -204,12 +209,11 @@ local function createToggle(labelText, yPos, settingKey)
 	btn.MouseButton1Click:Connect(function()
 		Settings[settingKey] = not Settings[settingKey]
 		updateBtn()
+		if callback then callback() end
 	end)
 
 	return updateBtn
 end
-
-local sliderUpdaters = {}
 
 local function createSlider(labelText, yPos, settingKey, minVal, maxVal, isHitbox)
 	local sizeLabel = Instance.new("TextLabel")
@@ -261,10 +265,9 @@ local function createSlider(labelText, yPos, settingKey, minVal, maxVal, isHitbo
 		sizeLabel.Text = labelText .. ": " .. val
 	end
 
-	-- Spara referens så vi kan synka efter config load
 	sliderUpdaters[settingKey] = function()
 		local val = isHitbox and Settings[settingKey].X or Settings[settingKey]
-		local ratio = (val - minVal) / (maxVal - minVal)
+		local ratio = math.clamp((val - minVal) / (maxVal - minVal), 0, 1)
 		updateSlider(ratio)
 	end
 
@@ -290,22 +293,45 @@ local function createSlider(labelText, yPos, settingKey, minVal, maxVal, isHitbo
 	end)
 end
 
+-- =====================
+-- Instant Loot Logic
+-- =====================
+local function applyInstantLoot()
+	for _, v in ipairs(workspace:GetDescendants()) do
+		if v.ClassName == "ProximityPrompt" then
+			v.HoldDuration = Settings.InstantLoot and 0 or v.HoldDuration
+		end
+	end
+end
+
+workspace.DescendantAdded:Connect(function(v)
+	if v.ClassName == "ProximityPrompt" and Settings.InstantLoot then
+		v.HoldDuration = 0
+	end
+end)
+
+-- =====================
+-- GUI Layout
+-- =====================
 createSection("— ESP —", 88)
-local espToggle = createToggle("ESP", 116, "ESPEnabled")
-local nameToggle = createToggle("Visa Namn", 146, "ShowName")
-local healthToggle = createToggle("Visa Hälsa", 176, "ShowHealth")
-local distToggle = createToggle("Visa Avstånd", 206, "ShowDistance")
+createToggle("ESP", 116, "ESPEnabled")
+createToggle("Visa Namn", 146, "ShowName")
+createToggle("Visa Hälsa", 176, "ShowHealth")
+createToggle("Visa Avstånd", 206, "ShowDistance")
 createSlider("Max Avstånd", 238, "MaxDistance", 100, 1000, false)
 
-createSection("— Hitbox —", 290)
-local hitboxToggle = createToggle("Hitbox", 318, "HitboxEnabled")
-local showHitboxToggle = createToggle("Visa Hitbox", 348, "ShowHitbox")
-createSlider("Storlek", 380, "HitboxSize", 10, 100, true)
+createSection("— Hitbox —", 292)
+createToggle("Hitbox", 320, "HitboxEnabled")
+createToggle("Visa Hitbox", 350, "ShowHitbox")
+createSlider("Storlek", 382, "HitboxSize", 10, 100, true)
 
--- Spara config knapp
+createSection("— Loot —", 434)
+createToggle("Instant Loot", 462, "InstantLoot", applyInstantLoot)
+
+-- Spara Config knapp
 local saveBtn = Instance.new("TextButton")
 saveBtn.Size = UDim2.new(1, -20, 0, 26)
-saveBtn.Position = UDim2.new(0, 10, 0, 432)
+saveBtn.Position = UDim2.new(0, 10, 0, 500)
 saveBtn.BackgroundColor3 = RED
 saveBtn.TextColor3 = WHITE
 saveBtn.Font = Enum.Font.GothamBold
@@ -323,7 +349,7 @@ saveBtn.MouseButton1Click:Connect(function()
 end)
 
 -- =====================
--- Höger Shift toggle
+-- Right Shift toggle
 -- =====================
 local guiVisible = true
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
@@ -497,11 +523,12 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- Init + ladda config
+-- Init
 loadConfig()
 for k, updater in pairs(sliderUpdaters) do
 	updater()
 end
+applyInstantLoot()
 
 for _, p in ipairs(Players:GetPlayers()) do
 	createESP(p)
